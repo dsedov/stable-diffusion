@@ -1,0 +1,6 @@
+notion:
+  access_key: "<API_KEY>"
+  artist_db: "<DB_ID>"
+  prompt_db: "<DB_ID>"
+stable_diffusion:
+  output_folder: "<ABSOLUTE PATH>"
