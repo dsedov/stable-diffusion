@@ -215,48 +215,47 @@ class Stable:
         print(f"Your samples are ready and waiting for you here: \n{self.outpath} \n"
             f" \nEnjoy.")
         return images
-import numbers
+
 def main():
     ndb = Notion("config.yaml")
     params = StableSettings()
-    params.outdir = "/home/dsedov/Dropbox/sd_prompt_watcher/"
+    params.outdir = "/home/dsedov/Dropbox/sd_output/"
+    params.sampledir = "/home/dsedov/Dropbox/sd_output/samples"
 
     stable = Stable(params)
 
     os.makedirs(params.outdir, exist_ok=True)
+    os.makedirs(params.sampledir, exist_ok=True)
 
-    while(True):
-        prompts = ndb.queued_prompts()
-        for prompt in prompts:
-            
-            if isinstance(prompt["iterations"], numbers.Number):
-                if prompt["iterations"] > 0:
-                    if isinstance(prompt["seed"], numbers.Number):
-                        params.seed = prompt["seed"]
-                    if isinstance(prompt["scale"], numbers.Number):
-                        params.scale = prompt["scale"]
-                    if isinstance(prompt["steps"], numbers.Number):
-                        params.ddim_steps = prompt["steps"]
-                    if isinstance(prompt["resolution"], str):
-                        res_data = str(prompt["resolution"]).split('x')
-                        params.W = int(res_data[0])
-                        params.H = int(res_data[1])
-                    
-                    params.prompt = prompt["prompt"]
-                    for i in range(prompt["iterations"]):
-                        params.seed = random.randint(0, 2**32) 
-                        images = stable.generate(params)
-                        save_filename = sanitize_for_filename(f"{params.prompt}__S{params.seed}.png")
-                        images[0].save(os.path.join(params.outdir, save_filename))
-                    params.scale = 7.5
-                    params.ddim_steps = 50
-                    params.W = 512
-                    params.H = 512
-                    
-                ndb.mark_prompt_done(prompt)
-        time.sleep(60)
-        print("Waiting for new prompts")
+    mods_without_coherance = ndb.empty_quality_modifiers()
+    prompts_for_mods_study = ndb.mods_study_prompts()
 
+    prompts_to_run = []
+    for mod in mods_without_coherance:
+        img = Image.new('RGB', (512 * 8,512 * 4), color = (255,255,255))
+        modifier = mod["modifier"]
+        images = []
+        for prompt in prompts_for_mods_study:
+            for iter in range(prompt["iterations"]):
+                prompt_text = prompt["prompt"].replace("MOD", mod["modifier"])
+                
+                params.prompt = prompt_text
+                params.seed = random.randint(0, 2**32) 
+                images = images + stable.generate(params)
+                for im in images:
+                    save_filename = sanitize_for_filename(f"{prompt_text}__S{params.seed}.png")
+                    im.save(os.path.join(params.sampledir, save_filename))
+        k = 0
+        for y in range(4):
+            for x in range(8):
+                if k > len(images) -1:
+                    break
+                Image.Image.paste(img, images[k], (x * 512,y * 512))
+                k += 1
+        now = datetime.now()
+        date = now.strftime("%m%d%Y")
+        save_filename = f"{sanitize_for_filename(modifier)}_{params.modelid}_{date}.png"
+        img.save(os.path.join(params.outdir, save_filename))
 
 if __name__ == "__main__":
     main()
